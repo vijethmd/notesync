@@ -8,79 +8,118 @@ import './NotePage.css';
 
 export default function NotePage() {
   const { id } = useParams();
-  const { user } = useAuth();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const token = localStorage.getItem('token');
   const { emit, on, connected } = useSocket(token);
 
   const [note, setNote] = useState(null);
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [activeUsers, setActiveUsers] = useState([]);
+  const [remoteCursors, setRemoteCursors] = useState({}); // socketId -> {username,color,x,y}
   const [typingUsers, setTypingUsers] = useState([]);
   const [showCollabModal, setShowCollabModal] = useState(false);
-  const [error, setError] = useState('');
-  const [uploadingImage, setUploadingImage] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [initialContent, setInitialContent] = useState(null); // set once, applied after render
+  const [initialContent, setInitialContent] = useState(null);
+  const [resizing, setResizing] = useState(null); // {img, startX, startW}
 
   const editorRef = useRef(null);
-  const fileInputRef = useRef(null);
   const saveTimer = useRef(null);
   const typingTimer = useRef(null);
   const isTypingRef = useRef(false);
   const isRemoteUpdate = useRef(false);
-  const activeDeleteBtn = useRef(null); // track current delete button
+  const loadedRef = useRef(false);
+  const fileInputRef = useRef(null);
 
-  // ── Remove any active delete button ──
-  const clearDeleteBtn = useCallback(() => {
-    if (activeDeleteBtn.current) {
-      activeDeleteBtn.current.remove();
-      activeDeleteBtn.current = null;
-    }
-  }, []);
+  // ── Apply initial content once editor renders ──
+  useEffect(() => {
+    if (initialContent === null) return;
+    if (editorRef.current) editorRef.current.innerHTML = initialContent;
+  }, [initialContent]);
 
-  // ── Show delete button on image wrapper click ──
-  const handleEditorClick = useCallback((e) => {
-    const wrapper = e.target.closest('.note-image-wrapper');
+  // ── Socket lifecycle ──
+  useEffect(() => {
+    if (!connected) return;
 
-    // Clicked outside any image → clear button
-    if (!wrapper) {
-      clearDeleteBtn();
-      return;
-    }
+    emit('join-note', id);
 
-    // Clicked on the delete button itself → delete the image
-    if (e.target.closest('.image-delete-btn')) return;
-
-    // Already showing delete btn for this wrapper → skip
-    if (wrapper.querySelector('.image-delete-btn')) return;
-
-    // Clear any previous btn
-    clearDeleteBtn();
-
-    const btn = document.createElement('button');
-    btn.className = 'image-delete-btn';
-    btn.innerHTML = '×';
-    btn.title = 'Remove image';
-    btn.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      wrapper.remove();
-      activeDeleteBtn.current = null;
-      emitChange();
+    const removeJoined = on('note-joined', ({ note: n, activeUsers: users }) => {
+      setNote(n); setTitle(n.title);
+      setInitialContent(n.content || '');
+      setActiveUsers(users);
+      loadedRef.current = true;
+      setLoading(false);
     });
 
-    wrapper.appendChild(btn);
-    activeDeleteBtn.current = btn;
-  }, [clearDeleteBtn]); // emitChange added below via ref trick
+    const removeUpdated = on('content-updated', ({ content, title: t }) => {
+      isRemoteUpdate.current = true;
+      if (content !== undefined && editorRef.current) {
+        const clean = content.replace(/<button[^>]*class="image-delete-btn"[^>]*>.*?<\/button>/gi, '');
+        const scrollTop = editorRef.current.scrollTop;
+        editorRef.current.innerHTML = clean;
+        editorRef.current.scrollTop = scrollTop;
+        attachImageHandlers();
+      }
+      if (t !== undefined) setTitle(t);
+      isRemoteUpdate.current = false;
+    });
 
-  // ── Emit content change ──
-  const emitChange = useCallback(() => {
+    const removeActiveUsers = on('active-users', (users) => setActiveUsers(users));
+    const removeUserJoined = on('user-joined', () => {});
+    const removeUserLeft = on('user-left', ({ socketId }) => {
+      setRemoteCursors(prev => { const n = { ...prev }; delete n[socketId]; return n; });
+    });
+    const removeTyping = on('user-typing', ({ username, color, isTyping }) => {
+      setTypingUsers(prev => isTyping
+        ? prev.includes(username) ? prev : [...prev, username]
+        : prev.filter(u => u !== username)
+      );
+    });
+
+    // ── Remote cursors ──
+    const removeCursor = on('cursor-updated', ({ socketId, username, color, position }) => {
+      if (!editorRef.current) return;
+      setRemoteCursors(prev => ({ ...prev, [socketId]: { username, color, ...position } }));
+    });
+
+    const removeError = on('error', msg => { setError(msg); setLoading(false); });
+
+    // HTTP fallback
+    const fallback = setTimeout(async () => {
+      if (!loadedRef.current) {
+        try {
+          const res = await notesAPI.getOne(id);
+          setNote(res.data); setTitle(res.data.title);
+          setInitialContent(res.data.content || '');
+        } catch { setError('Failed to load note'); }
+        finally { setLoading(false); }
+      }
+    }, 3000);
+
+    return () => {
+      clearTimeout(fallback);
+      emit('leave-note', id);
+      [removeJoined, removeUpdated, removeActiveUsers, removeUserJoined,
+       removeUserLeft, removeTyping, removeCursor, removeError].forEach(fn => fn?.());
+    };
+  }, [id, connected]);
+
+  // ── Save + emit changes ──
+  const emitChange = useCallback((content, t) => {
     if (isRemoteUpdate.current) return;
-    const html = editorRef.current?.innerHTML || '';
-    emit('content-change', { noteId: id, content: html });
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      setSaving(true);
+      emit('content-change', { noteId: id, content, title: t });
+      setTimeout(() => setSaving(false), 600);
+    }, 400);
+  }, [id, emit]);
 
+  // ── Typing indicator ──
+  const handleTyping = useCallback(() => {
     if (!isTypingRef.current) {
       isTypingRef.current = true;
       emit('typing', { noteId: id, isTyping: true });
@@ -90,307 +129,273 @@ export default function NotePage() {
       isTypingRef.current = false;
       emit('typing', { noteId: id, isTyping: false });
     }, 1500);
+  }, [id, emit]);
 
-    setSaving(true);
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => setSaving(false), 1000);
-  }, [emit, id]);
+  // ── Mouse move → broadcast cursor position ──
+  const handleMouseMove = useCallback((e) => {
+    if (!editorRef.current) return;
+    const rect = editorRef.current.getBoundingClientRect();
+    const position = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    emit('cursor-move', { noteId: id, position });
+  }, [id, emit]);
 
-  // ── Socket: join note ──
-  useEffect(() => {
-    if (!connected || !id) return;
-    emit('join-note', id);
-    return () => emit('leave-note', id);
-  }, [connected, id, emit]);
+  const handleInput = useCallback(() => {
+    if (isRemoteUpdate.current || !editorRef.current) return;
+    handleTyping();
+    const content = editorRef.current.innerHTML;
+    const t = title;
+    emitChange(content, t);
+  }, [emitChange, handleTyping, title]);
 
-  // ── Socket: event listeners ──
-  useEffect(() => {
-    const removeNoteJoined = on('note-joined', ({ note: n, activeUsers: users }) => {
-      setNote(n);
-      setTitle(n.title);
-      setInitialContent(n.content || '');
-      setActiveUsers(users);
-      setLoading(false);
-    });
-
-    const removeContentUpdated = on('content-updated', ({ content: c, title: t }) => {
-      if (c !== undefined && editorRef.current) {
-        // Save scroll position
-        const scrollY = window.scrollY;
-        isRemoteUpdate.current = true;
-        // Strip any delete buttons from incoming HTML before rendering
-        const clean = c.replace(/<button class="image-delete-btn"[^>]*>.*?<\/button>/gi, '');
-        editorRef.current.innerHTML = clean;
-        isRemoteUpdate.current = false;
-        window.scrollTo(0, scrollY);
-      }
-      if (t !== undefined) setTitle(t);
-    });
-
-    const removeActiveUsers = on('active-users', setActiveUsers);
-    const removeUserLeft = on('user-left', ({ username }) =>
-      setTypingUsers(prev => prev.filter(u => u.username !== username))
-    );
-    const removeUserTyping = on('user-typing', ({ username, color, isTyping }) => {
-      if (username === user.username) return;
-      setTypingUsers(prev => isTyping
-        ? prev.find(u => u.username === username) ? prev : [...prev, { username, color }]
-        : prev.filter(u => u.username !== username)
-      );
-    });
-    const removeError = on('error', msg => { setError(msg); setLoading(false); });
-
-    return () => {
-      removeNoteJoined(); removeContentUpdated(); removeActiveUsers();
-      removeUserLeft(); removeUserTyping(); removeError();
-    };
-  }, [on, user.username]);
-
-  // ── HTTP fallback ──
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (loading) {
-        notesAPI.getOne(id)
-          .then(res => {
-            setNote(res.data);
-            setTitle(res.data.title);
-            setInitialContent(res.data.content || '');
-          })
-          .catch(err => setError(err.response?.data?.message || 'Failed to load note'))
-          .finally(() => setLoading(false));
-      }
-    }, 3000);
-    return () => clearTimeout(t);
-  }, [id, loading]);
-  // ── Apply initial content once editor is rendered ──
-  useEffect(() => {
-    if (initialContent === null) return;
-    if (editorRef.current) {
-      editorRef.current.innerHTML = initialContent;
-    }
-  }, [initialContent]);
-
-
-  // ── Insert image at cursor ──
-  const insertImageAtCursor = useCallback((url) => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    editor.focus();
-
-    const sel = window.getSelection();
-    let range;
-    if (sel && sel.rangeCount > 0) {
-      range = sel.getRangeAt(0);
-    } else {
-      range = document.createRange();
-      range.selectNodeContents(editor);
-      range.collapse(false);
-    }
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'note-image-wrapper';
-    wrapper.contentEditable = 'false';
-
-    const img = document.createElement('img');
-    img.src = url;
-    img.className = 'note-inline-image';
-    img.alt = '';
-
-    // Caption — optional, hidden by default, shown on hover via CSS
-    const caption = document.createElement('p');
-    caption.className = 'note-image-caption';
-    caption.contentEditable = 'true';
-    caption.setAttribute('data-placeholder', 'Add a caption… (optional)');
-
-    wrapper.appendChild(img);
-    wrapper.appendChild(caption);
-
-    range.deleteContents();
-    range.insertNode(wrapper);
-
-    // Move cursor after wrapper
-    const after = document.createRange();
-    after.setStartAfter(wrapper);
-    after.collapse(true);
-    sel.removeAllRanges();
-    sel.addRange(after);
-
-    // Ensure a paragraph after
-    if (!wrapper.nextSibling || wrapper.nextSibling.nodeName !== 'P') {
-      const p = document.createElement('p');
-      p.innerHTML = '<br>';
-      wrapper.insertAdjacentElement('afterend', p);
-    }
-
-    emitChange();
+  const handleTitleChange = useCallback((e) => {
+    const t = e.target.value;
+    setTitle(t);
+    const content = editorRef.current?.innerHTML || '';
+    emitChange(content, t);
   }, [emitChange]);
 
-  // ── Upload image file ──
-  const uploadImage = useCallback(async (file) => {
-    if (!file || !file.type.startsWith('image/')) return;
-    setUploadingImage(true);
+  // ── Image handlers (delete button + resize handles) ──
+  const attachImageHandlers = useCallback(() => {
+    if (!editorRef.current) return;
+    editorRef.current.querySelectorAll('.note-image-wrapper').forEach(wrapper => {
+      if (wrapper.dataset.handled) return;
+      wrapper.dataset.handled = 'true';
+
+      const img = wrapper.querySelector('img');
+      if (!img) return;
+
+      // Delete button
+      let deleteBtn = wrapper.querySelector('.image-delete-btn');
+      if (!deleteBtn) {
+        deleteBtn = document.createElement('button');
+        deleteBtn.className = 'image-delete-btn';
+        deleteBtn.innerHTML = '×';
+        deleteBtn.contentEditable = 'false';
+        wrapper.appendChild(deleteBtn);
+      }
+      deleteBtn.onclick = () => {
+        wrapper.remove();
+        emitChange(editorRef.current.innerHTML, title);
+      };
+
+      // Resize handle
+      let handle = wrapper.querySelector('.resize-handle');
+      if (!handle) {
+        handle = document.createElement('div');
+        handle.className = 'resize-handle';
+        handle.contentEditable = 'false';
+        handle.innerHTML = '↔';
+        wrapper.appendChild(handle);
+      }
+
+      handle.onmousedown = (e) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const startW = img.offsetWidth;
+        const minW = 80;
+        const maxW = editorRef.current.offsetWidth - 32;
+
+        const onMove = (me) => {
+          const newW = Math.min(maxW, Math.max(minW, startW + (me.clientX - startX)));
+          img.style.width = newW + 'px';
+          img.style.maxWidth = '100%';
+        };
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          emitChange(editorRef.current.innerHTML, title);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      };
+
+      // Touch resize
+      handle.ontouchstart = (e) => {
+        e.preventDefault();
+        const startX = e.touches[0].clientX;
+        const startW = img.offsetWidth;
+        const minW = 80;
+        const maxW = editorRef.current.offsetWidth - 32;
+        const onMove = (te) => {
+          const newW = Math.min(maxW, Math.max(minW, startW + (te.touches[0].clientX - startX)));
+          img.style.width = newW + 'px';
+        };
+        const onEnd = () => {
+          document.removeEventListener('touchmove', onMove);
+          document.removeEventListener('touchend', onEnd);
+          emitChange(editorRef.current.innerHTML, title);
+        };
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('touchend', onEnd);
+      };
+    });
+  }, [emitChange, title]);
+
+  // Re-attach image handlers when content loads
+  useEffect(() => {
+    if (initialContent !== null) setTimeout(attachImageHandlers, 100);
+  }, [initialContent]);
+
+  // ── Upload image helper ──
+  const uploadAndInsert = useCallback(async (file) => {
+    if (!file?.type.startsWith('image/')) return;
     try {
       const res = await imagesAPI.upload(file);
-      insertImageAtCursor(res.data.url);
-    } catch (err) {
-      console.error('Image upload failed', err);
-    } finally {
-      setUploadingImage(false);
-    }
-  }, [insertImageAtCursor]);
+      const url = res.data.url;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'note-image-wrapper';
+      wrapper.contentEditable = 'false';
+      const img = document.createElement('img');
+      img.src = url; img.alt = 'image'; img.style.width = '320px'; img.style.maxWidth = '100%';
+      const caption = document.createElement('div');
+      caption.className = 'image-caption'; caption.contentEditable = 'true';
+      caption.setAttribute('placeholder', 'Add a caption…');
+      wrapper.appendChild(img); wrapper.appendChild(caption);
+      const sel = window.getSelection();
+      if (sel?.rangeCount) {
+        const range = sel.getRangeAt(0);
+        range.collapse(false); range.insertNode(wrapper);
+        range.setStartAfter(wrapper); range.collapse(true);
+        sel.removeAllRanges(); sel.addRange(range);
+      } else { editorRef.current?.appendChild(wrapper); }
+      attachImageHandlers();
+      emitChange(editorRef.current.innerHTML, title);
+    } catch (err) { console.error('Image upload failed', err); }
+  }, [attachImageHandlers, emitChange, title]);
 
-  const handleFileSelect = useCallback((e) => {
-    const file = e.target.files?.[0];
-    if (file) uploadImage(file);
-    e.target.value = '';
-  }, [uploadImage]);
-
+  // ── Paste handler ──
   const handlePaste = useCallback(async (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of items) {
       if (item.type.startsWith('image/')) {
         e.preventDefault();
-        const file = item.getAsFile();
-        if (file) await uploadImage(file);
+        await uploadAndInsert(item.getAsFile());
         return;
       }
     }
-    setTimeout(() => emitChange(), 0);
-  }, [uploadImage, emitChange]);
+  }, [uploadAndInsert]);
 
+  // ── Drag & drop ──
   const handleDrop = useCallback(async (e) => {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer?.files?.[0];
-    if (file && file.type.startsWith('image/')) await uploadImage(file);
-  }, [uploadImage]);
+    e.preventDefault(); setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) await uploadAndInsert(file);
+  }, [uploadAndInsert]);
 
-  const handleDragOver = useCallback((e) => { e.preventDefault(); setDragOver(true); }, []);
-  const handleDragLeave = useCallback(() => setDragOver(false), []);
+  // ── Keyboard shortcuts ──
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'I') {
+        e.preventDefault(); fileInputRef.current?.click();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
-  const handleKeyDown = useCallback((e) => {
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'i') {
-      e.preventDefault();
-      fileInputRef.current?.click();
-    }
-    // Any key clears the delete button
-    clearDeleteBtn();
-  }, [clearDeleteBtn]);
-
-  const handleEditorInput = useCallback(() => emitChange(), [emitChange]);
-
-  const isOwner = note?.owner?._id === user._id || note?.owner === user._id;
-  const getWordCount = () => (editorRef.current?.innerText || '').split(/\s+/).filter(Boolean).length;
+  const wordCount = (editorRef.current?.innerText || '').split(/\s+/).filter(Boolean).length;
 
   if (loading) return (
-    <div className="note-loading">
-      <div className="note-loading-inner">
-        <div className="note-loading-spinner" />
-        <span>Opening note…</span>
-      </div>
+    <div className="note-loading-screen">
+      <div className="note-loading-logo"><span style={{color:'#d4a853'}}>✦</span> NoteSync</div>
+      <div className="note-loading-bar"><div className="note-loading-fill" /></div>
     </div>
   );
 
   if (error) return (
-    <div className="note-loading">
-      <div className="note-error-box">
-        <p>{error}</p>
-        <button onClick={() => navigate('/')}>← Go back</button>
-      </div>
+    <div className="note-error-screen">
+      <p>{error}</p>
+      <button onClick={() => navigate('/')}>← Back to notes</button>
     </div>
   );
 
+  const isOwner = note?.owner?._id === user._id || note?.owner === user._id;
+
   return (
     <div className="note-page">
-      <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileSelect} />
-
+      {/* Header */}
       <header className="note-header">
-        <button className="back-btn" onClick={() => navigate('/')}>← Back</button>
+        <button className="back-btn" onClick={() => navigate('/')}>← Notes</button>
         <div className="note-header-center">
-          <div className="note-logo"><span>✦</span> NoteSync</div>
-          {uploadingImage && <span className="saving-badge">Uploading…</span>}
-          {!uploadingImage && saving && <span className="saving-badge">Saving…</span>}
-          {!uploadingImage && !saving && connected && <span className="saved-badge">✓ Saved</span>}
-          {!connected && <span className="offline-badge">● Offline</span>}
+          {typingUsers.length > 0 && (
+            <span className="typing-indicator">
+              {typingUsers.slice(0,2).join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing…
+            </span>
+          )}
         </div>
         <div className="note-header-right">
-          <button className="image-insert-btn" onClick={() => fileInputRef.current?.click()} title="Insert image (⌘⇧I)" disabled={uploadingImage}>
-            {uploadingImage ? <span className="img-btn-spinner" /> : (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <polyline points="21 15 16 10 5 21"/>
-              </svg>
-            )}
-            <span>Image</span>
-          </button>
-          <div className="active-users">
-            {activeUsers.filter(u => u.userId !== user._id.toString()).map(u => (
+          {saving && <span className="saving-dot">saving…</span>}
+          <div className="active-users-row">
+            {activeUsers.filter(u => u.userId !== user._id).slice(0, 4).map(u => (
               <div key={u.socketId} className="active-avatar" style={{ background: u.color }} title={u.username}>
                 {u.username[0].toUpperCase()}
               </div>
             ))}
           </div>
-          {isOwner && <button className="collab-btn" onClick={() => setShowCollabModal(true)}>+ Invite</button>}
+          <button className="toolbar-btn" onClick={() => fileInputRef.current?.click()} title="Insert image (⌘⇧I)">⌃ Image</button>
+          {isOwner && (
+            <button className="share-btn" onClick={() => setShowCollabModal(true)}>Share</button>
+          )}
         </div>
       </header>
 
-      {typingUsers.length > 0 && (
-        <div className="typing-bar">
-          {typingUsers.map(u => (
-            <span key={u.username} className="typing-chip">
-              <span className="typing-dot" style={{ background: u.color }} />
-              {u.username} is writing…
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className={`editor-wrap ${dragOver ? 'drag-over' : ''}`} onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}>
-        <input className="note-title-input" value={title} onChange={e => { setTitle(e.target.value); emit('content-change', { noteId: id, title: e.target.value }); }} placeholder="Untitled" maxLength={200} />
-        <div className="editor-divider" />
-
-        {dragOver && (
-          <div className="drag-overlay">
-            <div className="drag-overlay-inner">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <polyline points="21 15 16 10 5 21"/>
-              </svg>
-              <span>Drop image to insert</span>
-            </div>
+      {/* Editor area */}
+      <div className="note-body">
+        <div className="note-editor-wrap">
+          <input
+            className="note-title-input"
+            value={title}
+            onChange={handleTitleChange}
+            placeholder="Untitled Note"
+          />
+          <div className="note-meta-bar">
+            <span>{wordCount} words</span>
+            <span>{editorRef.current?.innerText?.length || 0} chars</span>
+            {note?.lastEditedBy && <span>Last edited by {note.lastEditedBy.username}</span>}
           </div>
-        )}
 
-        <div
-          ref={editorRef}
-          className="note-content-editor"
-          contentEditable
-          suppressContentEditableWarning
-          onInput={handleEditorInput}
-          onPaste={handlePaste}
-          onKeyDown={handleKeyDown}
-          onClick={handleEditorClick}
-          data-placeholder="Start writing… paste or drop images, or click Image above."
-          spellCheck
-        />
+          {/* Cursor container — absolute overlay over editor */}
+          <div className="cursor-overlay">
+            {Object.entries(remoteCursors).map(([sid, c]) => (
+              <div
+                key={sid}
+                className="remote-cursor"
+                style={{ left: c.x, top: c.y, '--cursor-color': c.color }}
+              >
+                <div className="cursor-caret" />
+                <div className="cursor-label">{c.username}</div>
+              </div>
+            ))}
+          </div>
 
-        <div className="editor-hint">
-          <span>Tip: paste an image with <kbd>⌘V</kbd> · drag &amp; drop · or click <strong>Image</strong> above · click image to delete</span>
+          <div
+            ref={editorRef}
+            className={`note-editor ${dragOver ? 'drag-over' : ''}`}
+            contentEditable
+            suppressContentEditableWarning
+            onInput={handleInput}
+            onPaste={handlePaste}
+            onMouseMove={handleMouseMove}
+            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            data-placeholder="Start writing…"
+            spellCheck
+          />
         </div>
       </div>
 
-      <footer className="note-footer">
-        <span>{getWordCount()} words</span>
-        <span className="footer-sep">·</span>
-        <span>{editorRef.current?.innerText?.length || 0} chars</span>
-        {note?.collaborators?.length > 0 && (<><span className="footer-sep">·</span><span>{note.collaborators.length} collaborator{note.collaborators.length !== 1 ? 's' : ''}</span></>)}
-        {note?.lastEditedBy && (<><span className="footer-sep">·</span><span>Last edit by {note.lastEditedBy.username}</span></>)}
-      </footer>
+      <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }}
+        onChange={e => { if (e.target.files?.[0]) { uploadAndInsert(e.target.files[0]); e.target.value = ''; } }} />
 
-      {showCollabModal && <CollaboratorModal note={note} onClose={() => setShowCollabModal(false)} onUpdate={setNote} />}
+      {showCollabModal && note && (
+        <CollaboratorModal
+          note={note}
+          onClose={() => setShowCollabModal(false)}
+          onUpdate={setNote}
+        />
+      )}
     </div>
   );
 }

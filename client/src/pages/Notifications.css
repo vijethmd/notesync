@@ -1,0 +1,179 @@
+.notif-page {
+  min-height: 100vh;
+  background: var(--bg-0);
+  font-family: 'Outfit', sans-serif;
+  color: var(--text-primary);
+}
+
+.notif-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 62px;
+  background: rgba(12,11,9,0.88);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(24px);
+}
+
+.back-btn-notif {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  transition: all 0.2s;
+  width: 80px;
+}
+.back-btn-notif:hover { border-color: var(--border-hover); color: var(--text-primary); }
+
+.notif-header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notif-logo-icon { color: var(--gold); font-size: 16px; }
+
+.notif-header-title h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.notif-main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+.notif-section { margin-bottom: 40px; }
+
+.notif-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.notif-section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.notif-card {
+  display: flex;
+  gap: 14px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  transition: border-color 0.2s;
+  animation: fadeUp 0.3s ease both;
+}
+
+.notif-card.pending { border-color: rgba(212,168,83,0.15); }
+.notif-card.pending::before {
+  content: '';
+  position: absolute;
+  /* not absolute here, use box-shadow */
+}
+
+.notif-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 15px;
+  color: #0c0b09;
+  flex-shrink: 0;
+}
+
+.notif-body { flex: 1; min-width: 0; }
+
+.notif-text {
+  font-size: 14.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 5px;
+  font-weight: 300;
+}
+.notif-text strong { color: var(--text-primary); font-weight: 600; }
+.notif-text em { color: var(--gold-dim); font-style: italic; }
+
+.notif-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+
+.notif-actions { display: flex; gap: 8px; }
+
+.notif-accept {
+  background: var(--gold);
+  color: #0c0b09;
+  border: none;
+  padding: 8px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Outfit', sans-serif;
+}
+.notif-accept:hover:not(:disabled) { background: #e0b85e; box-shadow: 0 4px 16px rgba(212,168,83,0.25); }
+.notif-accept:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.notif-decline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Outfit', sans-serif;
+}
+.notif-decline:hover:not(:disabled) { border-color: rgba(192,98,74,0.3); color: #e8957a; }
+.notif-decline:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.notif-status {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  display: inline-block;
+}
+.notif-status.accepted { background: rgba(122,170,126,0.12); color: #9dcaa1; border: 1px solid rgba(122,170,126,0.2); }
+.notif-status.declined { background: rgba(192,98,74,0.1); color: #e8957a; border: 1px solid rgba(192,98,74,0.2); }
+
+.notif-loading { display: flex; flex-direction: column; gap: 12px; }
+.notif-skeleton { height: 100px; background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius); animation: shimmer 1.6s ease-in-out infinite; }
+
+.notif-empty {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.notif-empty-icon { font-size: 48px; display: block; margin-bottom: 8px; opacity: 0.5; }
+.notif-empty p { font-size: 17px; color: var(--text-secondary); font-weight: 500; }
+.notif-empty span { font-size: 13.5px; font-weight: 300; }
