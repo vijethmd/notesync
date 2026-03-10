@@ -1,0 +1,571 @@
+.note-page {
+  min-height: 100vh;
+  background: var(--bg-0);
+  color: var(--text-primary);
+  font-family: 'Outfit', sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Header ─── */
+.note-header {
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  height: 58px;
+  background: rgba(12,11,9,0.88);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(24px);
+  gap: 16px;
+}
+
+.back-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Outfit', sans-serif;
+  white-space: nowrap;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.back-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+  background: var(--bg-2);
+}
+
+.note-header-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.saving-badge {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+  animation: shimmer 1s ease infinite;
+}
+
+.saved-badge {
+  font-size: 12px;
+  color: var(--green);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.offline-badge {
+  font-size: 12px;
+  color: var(--red);
+  font-weight: 500;
+}
+
+/* Logo in editor header */
+.note-logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.note-logo span { color: var(--gold); font-size: 14px; }
+
+.note-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.active-users {
+  display: flex;
+  align-items: center;
+}
+
+.active-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 11px;
+  color: #0c0b09;
+  border: 2px solid var(--bg-0);
+  margin-left: -7px;
+  transition: transform 0.2s;
+  cursor: default;
+  position: relative;
+}
+
+.active-avatar:first-child { margin-left: 0; }
+
+.active-avatar:hover {
+  transform: translateY(-3px);
+  z-index: 5;
+}
+
+/* Tooltip on hover */
+.active-avatar::after {
+  content: attr(title);
+  position: absolute;
+  bottom: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.active-avatar:hover::after { opacity: 1; }
+
+.collab-btn {
+  background: var(--gold-subtle);
+  border: 1px solid rgba(212,168,83,0.2);
+  color: var(--gold-dim);
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Outfit', sans-serif;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.collab-btn:hover {
+  background: rgba(212,168,83,0.12);
+  color: var(--gold);
+  border-color: rgba(212,168,83,0.35);
+}
+
+/* ─── Typing bar ─── */
+.typing-bar {
+  padding: 7px 48px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: rgba(212,168,83,0.03);
+  border-bottom: 1px solid rgba(212,168,83,0.06);
+  animation: fadeIn 0.2s ease;
+}
+
+.typing-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.typing-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  animation: pulseDot 1s ease infinite;
+}
+
+/* ─── Editor ─── */
+.editor-wrap {
+  flex: 1;
+  max-width: 740px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 56px 28px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  animation: fadeUp 0.4s ease;
+}
+
+/* Decorative line between title and content */
+.editor-divider {
+  width: 48px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  border-radius: 1px;
+  margin: 20px 0 28px;
+  opacity: 0.5;
+}
+
+.note-title-input {
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-family: 'Playfair Display', serif;
+  font-size: 40px;
+  font-weight: 700;
+  width: 100%;
+  padding: 0;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.note-title-input::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.note-content-input {
+  background: none;
+  border: none;
+  outline: none;
+  color: rgba(240,234,214,0.75);
+  font-family: 'Outfit', sans-serif;
+  font-size: 16.5px;
+  line-height: 1.85;
+  width: 100%;
+  resize: none;
+  flex: 1;
+  min-height: calc(100vh - 300px);
+  padding: 0;
+  font-weight: 300;
+}
+
+.note-content-input::placeholder {
+  color: var(--text-muted);
+  font-weight: 300;
+  font-style: italic;
+}
+
+/* ─── Footer ─── */
+.note-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 48px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+  background: rgba(12,11,9,0.6);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.footer-sep {
+  color: var(--border);
+  margin: 0 2px;
+}
+
+/* ─── Loading / Error ─── */
+.note-loading {
+  min-height: 100vh;
+  background: var(--bg-0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.note-loading-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: var(--text-muted);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 300;
+}
+
+.note-loading-icon {
+  font-size: 28px;
+  color: var(--gold-dim);
+  animation: shimmer 2s ease infinite;
+}
+
+.note-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--border);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+.note-error-box {
+  text-align: center;
+  color: var(--text-muted);
+  font-family: 'Outfit', sans-serif;
+  padding: 40px;
+}
+
+.note-error-box p {
+  margin-bottom: 20px;
+  font-size: 15px;
+  font-weight: 300;
+}
+
+.note-error-box button {
+  background: var(--gold);
+  border: none;
+  color: #0c0b09;
+  padding: 10px 22px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  font-size: 13.5px;
+  transition: all 0.2s;
+}
+
+.note-error-box button:hover { background: #e0b85e; }
+
+/* ─── Image Insert Button ─── */
+.image-insert-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--gold-subtle);
+  border: 1px solid rgba(212,168,83,0.18);
+  color: var(--gold-dim);
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.image-insert-btn:hover:not(:disabled) {
+  background: rgba(212,168,83,0.12);
+  color: var(--gold);
+  border-color: rgba(212,168,83,0.35);
+}
+
+.image-insert-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.img-btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(212,168,83,0.2);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ─── contentEditable Editor ─── */
+.note-content-editor {
+  flex: 1;
+  min-height: calc(100vh - 320px);
+  outline: none;
+  color: rgba(240,234,214,0.78);
+  font-family: 'Outfit', sans-serif;
+  font-size: 16.5px;
+  line-height: 1.85;
+  font-weight: 300;
+  caret-color: var(--gold);
+  word-break: break-word;
+}
+
+/* Placeholder via CSS */
+.note-content-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  font-style: italic;
+  pointer-events: none;
+  display: block;
+}
+
+.note-content-editor p { margin: 0 0 0.5em; }
+.note-content-editor p:last-child { margin-bottom: 0; }
+.note-content-editor br { line-height: 1.85; }
+
+/* ─── Inline Image Wrapper ─── */
+.note-image-wrapper {
+  display: block;
+  margin: 28px 0;
+  position: relative;
+  border-radius: var(--radius);
+  overflow: visible;
+  border: 1px solid var(--border);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  user-select: none;
+}
+
+.note-image-wrapper:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+}
+
+.note-inline-image {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  height: auto;
+  max-height: 560px;
+  object-fit: contain;
+  background: var(--bg-2);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+/* ─── Delete Button (appears on click) ─── */
+.image-delete-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(12,11,9,0.85);
+  border: 1px solid rgba(192,98,74,0.5);
+  color: #e8957a;
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: all 0.15s;
+  z-index: 10;
+  padding: 0;
+  font-family: sans-serif;
+  animation: fadeIn 0.15s ease;
+}
+
+.image-delete-btn:hover {
+  background: rgba(192,98,74,0.85);
+  color: #fff;
+  border-color: transparent;
+  transform: scale(1.1);
+}
+
+/* ─── Caption (optional — hidden by default, shows on hover) ─── */
+.note-image-caption {
+  display: block;
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 16px;
+  background: var(--bg-2);
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+  outline: none;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 300;
+  border-top: 0px solid var(--border);
+  transition: max-height 0.25s ease, padding 0.25s ease, border-top-width 0.25s ease;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+/* Show caption on wrapper hover or when caption is focused */
+.note-image-wrapper:hover .note-image-caption,
+.note-image-caption:focus {
+  max-height: 80px;
+  padding: 9px 16px;
+  border-top-width: 1px;
+}
+
+.note-image-caption:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* ─── Drag & Drop ─── */
+.editor-wrap {
+  position: relative;
+}
+
+.editor-wrap.drag-over .note-content-editor {
+  opacity: 0.4;
+}
+
+.drag-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.drag-overlay-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--gold);
+  background: rgba(12,11,9,0.85);
+  border: 2px dashed rgba(212,168,83,0.4);
+  border-radius: var(--radius);
+  padding: 40px 60px;
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.15s ease;
+}
+
+.drag-overlay-inner span {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--gold-dim);
+  letter-spacing: 0.02em;
+}
+
+/* ─── Hint text ─── */
+.editor-hint {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px dashed rgba(212,168,83,0.07);
+}
+
+.editor-hint span {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 300;
+  font-style: italic;
+  letter-spacing: 0.01em;
+}
+
+.editor-hint kbd {
+  display: inline-block;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-secondary);
+  font-style: normal;
+}
+
+.editor-hint strong {
+  color: var(--gold-dim);
+  font-weight: 600;
+}
